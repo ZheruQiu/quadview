@@ -27,6 +27,7 @@ datapath = os.getenv("APPDATA") .. sep .. "QuadView"
 cfgname = datapath .. sep .. "quadview.ini"
 runname = datapath .. sep .. "running"
 minimal_preview = datapath .. sep .. "minimal_preview.tex"
+latexerr=""
 
 if not wx.wxFileName.DirExists(datapath) and not wx.wxFileName.Mkdir(datapath) then
     wx.wxMessageBox("Failed to create main folder!", "Error")
@@ -144,6 +145,7 @@ function SaveSettings()
     config:SetPath("/Settings")
     config:Write("engine", engine)
     config:Write("resolution", resolution)
+    config:Write("heightlevel",heightlevel)
 
     config:delete() -- always delete the config
 end
@@ -268,10 +270,12 @@ local previewTimer = wx.wxTimer(frame, ID.TIMER_PREVIEW)
 dirname = datapath .. sep .. "directory.txt"
 texname = datapath .. sep .. "fragment.tex"
 pdfname = datapath .. sep .. "fragment.pdf"
-pngname = datapath .. sep .. "fragment-%d.png"
+pngname = datapath .. sep .. "fragment.png"
+cuttedpngname = datapath .. sep .. "fragment-%d.png"
 
 if not engine then engine = "xelatex" end
 if not resolution then resolution = 450 end
+if not heightlevel then heightlevel = "VM" end
 switch = "-interaction=nonstopmode -output-directory=\"" .. datapath .. "\""
 
 local isPending = false
@@ -311,9 +315,34 @@ function PreviewDocument()
     local cmd = "mudraw -r " .. tostring(resolution) .. " -o " .. "\"" .. pngname .. "\" \"" .. pdfname .. "\""
     RemoveImage()
 	if wx.wxFileName.FileExists(pdfname) then
-        ExecCommand(cmd, mainpath, UpdateBitmap)
+        ExecCommand(cmd, mainpath, CropBitmap)
+        frame:SetStatusText(latexerr .. "  Running mudraw")
     else
-        UpdateBitmap()
+        frame:SetStatusText(latexerr .. "  PDF NOT FOUND")
+    end
+end
+
+function CropBitmap()
+	local width=1600
+    if resolution==450 then
+    	width=2400
+    elseif resolution==600 then
+    	width=3200
+    end
+    local height
+    if heightlevel == "VM" then
+    	height=width/2
+    elseif heightlevel == "VL" then
+    	height=width*11/16
+    elseif heightlevel == "VS" then
+    	height=width*5/16
+    end
+    local imcmd = "convert \"" .. pngname .. "\" -crop " .. tostring(width) .."x"..tostring(height).." +repage -scene 1 \"" .. cuttedpngname .. "\""
+    if wx.wxFileName.FileExists(pngname) then
+        ExecCommand(imcmd, mainpath, UpdateBitmap)
+        frame:SetStatusText(latexerr .. "  Running ImageMagick")
+    else
+        frame:SetStatusText(latexerr .. "  PNG NOT FOUND")
     end
 end
 
@@ -325,6 +354,7 @@ function UpdateBitmap()
             ResizeControl()
         end
     else
+    	frame:SetStatusText(latexerr .. "  CUTTED PNG NOT FOUND")
         ClearImage()
         ResizeControl()
     end
@@ -337,29 +367,32 @@ function NextBitmap()
     end
 end
 
-local page, total = 1, 1
+page = 1
+total = 0
 
 function FindImage()
     local png = ""
-    page = 1
     while true do
-        png = string.format(pngname, page)
+        png = string.format(cuttedpngname, page)
         if wx.wxFileName.FileExists(png) then
             page = page + 1
         else break end
     end
-    page = page - 1
+    page = page-1
     total = page
     if page > 0 then
-        return string.format(pngname, page)
+    	page = 1
+    	frame:SetStatusText(latexerr .. "  Page:1 of " .. tostring(total))
+        return string.format(cuttedpngname, 1)
     else return nil end
 end
 
 function NextImage()
     if total == 1 then do return nil end end
     if page == total then page = 1 else page = page + 1 end
-    local png = string.format(pngname, page)
+    local png = string.format(cuttedpngname, page)
     if wx.wxFileName.FileExists(png) then
+    	frame:SetStatusText(latexerr .. "  Page:" .. tostring(page) .." of " .. tostring(total))
         return png
     else return nil end
 end
@@ -367,10 +400,11 @@ end
 function RemoveImage()
     local i = 1
     while true do
-        if wx.wxRemoveFile(string.format(pngname, i)) then
+        if wx.wxRemoveFile(string.format(cuttedpngname, i)) then
             i = i + 1
         else break end
     end
+    wx.wxRemoveFile(pngname)
 end
 
 function IsEmptyImage()
@@ -420,9 +454,11 @@ function LocateError()
                 msg = string.sub(msg, 1, -2) .. " " .. cs .. "."
             end
         end
-        frame:SetStatusText(" ! " .. msg)
+        frame:SetStatusText("! " .. msg)
+        latexerr ="! " .. msg
     else
         frame:SetStatusText(engine .. " Success.")
+        latexerr=""
     end
 end
 
@@ -453,12 +489,30 @@ ID.R450       = NewID()
 ID.R300       = NewID()
 
 menu:Append(ID.RESOLUTION, "Resolution", wx.wxMenu{
-    { ID.R600, "&High",   "High Resolution",   wx.wxITEM_RADIO },
-    { ID.R450, "&Medium", "Medium Resolution", wx.wxITEM_RADIO },
-    { ID.R300, "&Low",    "Low Resolution",    wx.wxITEM_RADIO },
+    { ID.R600, "&600dpi",   "High Resolution",   wx.wxITEM_RADIO },
+    { ID.R450, "&450dpi", "Medium Resolution", wx.wxITEM_RADIO },
+    { ID.R300, "&300dpi",    "Low Resolution",    wx.wxITEM_RADIO },
 })
 
 menu:Check(ID["R" .. tostring(resolution)], true)
+
+menu:AppendSeparator()
+
+ID.VHEIGHT  = NewID()
+ID.VL       = NewID()
+ID.VM       = NewID()
+ID.VS       = NewID()
+
+menu:Append(ID.VHEIGHT, "Cutted PNG Height", wx.wxMenu{
+	--9:16
+    { ID.VL, "&Large",   "9:16",   wx.wxITEM_RADIO },
+    --1:2
+    { ID.VM, "&Medium", "1:2", wx.wxITEM_RADIO },
+    --3:8
+    { ID.VS, "&Small",    "3:8",    wx.wxITEM_RADIO },
+})
+
+menu:Check(ID[heightlevel], true)
 
 menu:AppendSeparator()
 
@@ -474,6 +528,8 @@ menu:Append(ID.MIN, "Minimal Preview", wx.wxMenu{
     { ID.MINOFF, "O&FF", "Turn Minimal Preview Off", wx.wxITEM_RADIO },
     { ID.MINEDIT, "&Edit preamble", "Edit additional preamble of the fragment", wx.wxITEM_RADIO },
 })
+
+menu:Check(ID.MINON, false)
 
 menu:AppendSeparator()
 
@@ -509,6 +565,18 @@ end)
 
 frame:Connect(ID.R300, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
     resolution = 300
+end)
+
+frame:Connect(ID.VL, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    heightlevel = "VL"
+end)
+
+frame:Connect(ID.VM, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    heightlevel = "VM"
+end)
+
+frame:Connect(ID.VS, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    heightlevel = "VS"
 end)
 
 frame:Connect(ID.FRAGMENT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)

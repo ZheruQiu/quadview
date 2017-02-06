@@ -1,0 +1,109 @@
+
+  Requires(20110504);
+
+  PushTagsandRegisters;
+
+  //Loading Current selected area to register
+  LetReg(9, "%S");
+
+  //Disable EventTimer
+  SetEventTimer(0, 1000, "Exe('%$(|quadview|);\fragment.edt')");
+
+  //If the button Pressed without selection
+  //I thinks it's just for stopping the auto-update
+  //Then turn off EventTimer and leave
+  IfStr('%!9',"","=","JMP('Exit')","");
+
+  CreateFolders("%@('APPDATA');\QuadView",0);
+
+  Assign("quadview", "%b\QuadView");
+
+  Assign("quadview-version", "\def\quadview{0.5}%\");
+  Assign("quadview-handout", "\PassOptionsToClass{handout}{beamer}%\");
+  Assign("quadview-preview", >
+    "\makeatletter%\"+>
+    "\@ifclassloaded{beamer}{}{%\"+>
+    "  \usepackage[active,tightpage]{preview}%\"+>
+    "  \setlength{\PreviewBorder}{8pt}%\"+>
+    "  \AtBeginDocument{\begin{preview}}%\"+>
+    "  \AtEndDocument{\end{preview}}%\"+>
+    "  \pagestyle{empty}%\"+>
+    "}%\"+>
+    "\makeatother">
+  );
+  //Notice minimum preview is not functioning normally with luatex
+  //because of tightpage option of preview package goes wrong
+  Assign("quadview-minpreview", >
+  "\documentclass[executivepaper]{article}%\"+>
+  "\usepackage{amsmath}%\"+>
+  "\usepackage{amssymb}%\"+>
+  "\usepackage{mathtools}%\"+>
+  "\usepackage[active,delayed,showlabels,footnotes,tightpage]{preview}">
+);
+  Assign("quadview-fragment", "");
+  Assign("quadview-fragment-old", "");
+
+:Prepare:: ==========================================================
+  IfisMode("TeX","%!m","","JMP('Exit')");
+  IfisMode("STY","%!m","JMP('Exit')","");
+  IfisMode("AUX","%!m","JMP('Exit')","");
+
+  OpenOutput("%@('APPDATA');\QuadView\directory.txt",0,0,0,"%F");
+  WrL("%P");
+  CloseOutput;
+
+:Fragment:: =========================================================
+//Fragment is the selection loaded to Register 9
+
+:Compare:: ==========================================================
+
+  Assign('quadview-fragment-old', '%$(|quadview-fragment|)');
+  Assign('quadview-fragment', '%!9');
+  IfStr('%$(|quadview-fragment|)', '%$(|quadview-fragment-old|)', '=', 'JMP("Exit")', '');
+  IfFileExists("%@('APPDATA');\QuadView\minimal_preview.tex","","JMP('Preamble')");
+
+:MinOutput:: ==========================================================
+//Using Register 4
+  ReadFile( "%@('APPDATA');\QuadView\minimal_preview.tex", 4, 0, 0, 0 );
+  OpenOutput("%@('APPDATA');\QuadView\fragment.tex",0,0,0,"%F");
+  WrL("%$('quadview-version')");
+  WrL("%$('quadview-minpreview')");
+  WrL("%!4");
+  WrL("\begin{document}");
+  WrL("\begin{preview}");
+  WrL("%$('quadview-fragment')");
+  WrL("\end{preview}");
+  WrL("\end{document}");
+  CloseOutput;
+  JMP('StartLua')
+
+:Preamble:: =========================================================
+
+  GetPreamble("\begin{document}",8);
+  IfOK(!'Relax;',!|LetReg(8,>
+    '\documentclass{article}%\'+>
+    '\usepackage{amsmath}%\'>
+  );|);
+
+  FindInString("%!8\begin{document}%\", "%!9", -1, -1, 10);
+  IfOK("JMP('StartLua')");
+
+:Output:: ===========================================================
+
+  OpenOutput("%@('APPDATA');\QuadView\fragment.tex",0,0,0,"%F");
+  WrL("%$('quadview-version')");
+  WrL("%$('quadview-handout')");
+  WrL("%!8");
+  WrL("%$('quadview-preview')");
+  WrL("\begin{document}");
+  WrL;
+  WrL("%$('quadview-fragment')");
+  WrL;
+  WrL("\end{document}");
+  CloseOutput;
+:StartLua:: =============================================================
+  //Avoid multiple instance
+  IfFileExists("%@('APPDATA');\QuadView\running","JMP('Exit')","");
+  Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
+:Exit:: =============================================================
+  PopTagsandRegisters;

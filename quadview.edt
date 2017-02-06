@@ -20,13 +20,14 @@
     "}%\"+>
     "\makeatother">
   );
+  //Load a minimum of common packages (DO NOT extract info from preamble)
   //Notice minimum preview is not functioning normally with luatex
   //because of tightpage option of preview package goes wrong
   Assign("quadview-minpreview", >
   "\documentclass[american]{article}%\"+>
   "\usepackage{amsmath}%\"+>
   "\usepackage{amssymb}%\"+>
-  "\usepackage{color}%\"+>
+  "\usepackage{mathtools}%\"+>
   "\usepackage[active,delayed,showlabels,footnotes,tightpage]{preview}">
 );
   Assign("quadview-fragment", "");
@@ -36,6 +37,8 @@
   GetVersion(1);
   IfNum(%!1, 8.1, '>=', 'LetRegNum(2,700)', 'LetRegNum(2,1)');
   SetEventTimer(1, %!2, "Exe('%$(|quadview|);\fragment.edt')");
+  //Avoid multiple instance
+  IfFileExists("%@('APPDATA');\QuadView\running","JMP('Exit')","");
   Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
-
+:Exit:: =============================================================
   PopTagsandRegisters;
