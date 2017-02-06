@@ -26,6 +26,7 @@ mainpath = wx.wxGetCwd()
 datapath = os.getenv("APPDATA") .. sep .. "QuadView"
 cfgname = datapath .. sep .. "quadview.ini"
 runname = datapath .. sep .. "running"
+minimal_preview = datapath .. sep .. "minimal_preview.tex"
 
 if not wx.wxFileName.DirExists(datapath) and not wx.wxFileName.Mkdir(datapath) then
     wx.wxMessageBox("Failed to create main folder!", "Error")
@@ -49,7 +50,7 @@ bitmap = wx.wxBitmap()
 preview = wx.wxStaticBitmap(frame, wx.wxID_ANY)
 
 statusbar = frame:CreateStatusBar()
-frame:SetStatusText(" Ready")
+frame:SetStatusText("Ready")
 
 frame:Connect(wx.wxEVT_CLOSE_WINDOW, function(event)
     image:delete()
@@ -300,14 +301,16 @@ function CompileDocument()
     end
     local cmd = engine .. " " .. switch .. " \"" .. texname .. "\""
     wx.wxRemoveFile(pdfname)
-    isPending = ExecCommand(cmd, dir, PreviewDocument)
+    --Replace \ to / to resolve http://tex.stackexchange.com/questions/271617/luatex-issue-with-space-in-path
+    isPending = ExecCommand(string.gsub(cmd, "\\", "/"), dir, PreviewDocument)
+    frame:SetStatusText("Running " .. engine)
 end
 
 function PreviewDocument()
     LocateError()
-    local cmd = "mudraw -r " .. tostring(resolution) .. " -o " .. pngname .. " " .. pdfname
+    local cmd = "mudraw -r " .. tostring(resolution) .. " -o " .. "\"" .. pngname .. "\" \"" .. pdfname .. "\""
     RemoveImage()
-    if wx.wxFileName.FileExists(pdfname) then
+	if wx.wxFileName.FileExists(pdfname) then
         ExecCommand(cmd, mainpath, UpdateBitmap)
     else
         UpdateBitmap()
@@ -419,7 +422,7 @@ function LocateError()
         end
         frame:SetStatusText(" ! " .. msg)
     else
-        frame:SetStatusText(" Success.")
+        frame:SetStatusText(engine .. " Success.")
     end
 end
 
@@ -459,9 +462,24 @@ menu:Check(ID["R" .. tostring(resolution)], true)
 
 menu:AppendSeparator()
 
+ID.MIN         = NewID()
+ID.MINON       = NewID()
+ID.MINONCJK    = NewID()
+ID.MINOFF      = NewID()
+ID.MINEDIT     = NewID()
+
+menu:Append(ID.MIN, "Minimal Preview", wx.wxMenu{
+    { ID.MINON, "&ON",   "Turn Minimal Preview On",   wx.wxITEM_RADIO },
+    { ID.MINONCJK, "ON &with CJK",   "Turn Minimal Preview On",   wx.wxITEM_RADIO },
+    { ID.MINOFF, "O&FF", "Turn Minimal Preview Off", wx.wxITEM_RADIO },
+    { ID.MINEDIT, "&Edit preamble", "Edit additional preamble of the fragment", wx.wxITEM_RADIO },
+})
+
+menu:AppendSeparator()
+
 ID.FRAGMENT = NewID()
 
-menu:Append(ID.FRAGMENT, "&Fragment", "Open Fragment Folder")
+menu:Append(ID.FRAGMENT, "&Show Fragment Folder", "Open Fragment Folder")
 
 menu:AppendSeparator()
 
@@ -495,6 +513,29 @@ end)
 
 frame:Connect(ID.FRAGMENT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
     wx.wxExecute("explorer "  .. datapath, wx.wxEXEC_ASYNC)
+end)
+
+frame:Connect(ID.MINON, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    file:Create(minimal_preview, true)
+    file:Close()
+end)
+
+frame:Connect(ID.MINONCJK, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    file:Create(minimal_preview, true)
+    engine = "xelatex"
+    frame:SetStatusText("engine switched to xelatex")
+    file:Write("\\usepackage{XeCJK}")
+    file:Close()
+end)
+
+frame:Connect(ID.MINOFF, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    if not wx.wxRemoveFile(minimal_preview) then
+        wx.wxMessageBox("Unable to delete file minimal_preview.tex!", "Error", wx.wxOK + wx.wxCENTRE, frame)
+    end
+end)
+
+frame:Connect(ID.MINEDIT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    wx.wxExecute("notepad \""  .. minimal_preview .. "\"", wx.wxEXEC_ASYNC)
 end)
 
 frame:Connect(ID.ABOUT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
