@@ -1,3 +1,4 @@
+===About
 See http://zohooo.github.io/quadview/ for info about the orginal version.
 The following is for the version modified by Zheru Qiu
 
@@ -7,8 +8,7 @@ It will show the preview of current paragraph in the upper right corner of WinEd
 
 And it will update the preview automatically if current paragraph has been changed.
 
-Install
-
+===Installing
 Click menu item Options -> Configuration Wizard. Then click Browse Local Folder button to open local folder of WinEdt. Create a subfolder named QuadView in the folder, and copy all QuadView files into this subfolder.
 Click menu item Options -> Options Interface. In the sidebar select and double click Menus and toolbar -> Main Menu. Find the following lines (line 3271-3272 in WinEdt 9) in MainMenu.ini file:
     MENU="&Accessories"
@@ -41,8 +41,11 @@ Insert the following lines after them
       BUTTON="QuadView"
       BUTTON="QuadView selected/Stop updating"
 Click menu item Macros->Execute Current Macro to update toolbar.
-Restart WinEdt. Now you could press shortcut Ctrl+Alt+P, or click the last icon in the first toolbar, to open QuadView window.
-
+Restart WinEdt. 
+===Usage
+You could press shortcut Ctrl+Alt+P, or click the last icon in the first toolbar, to open QuadView window.
 The second button stops the automatic update of QuadView.And when pressed selecting some text, the selected text will be previewed.
+Click the display to switch to next page.
+Right-click the display to show options menu.
 For computers have high resolution display,Turning off the DPI Scaling in the Compliance page of property of wlua52.exe is recommended.
-
+When lua unluckily crashed, delete %Appdata%\QuadView\running before restart.

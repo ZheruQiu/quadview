@@ -157,6 +157,7 @@ function RestoreSettings()
     config:SetPath("/Settings")
     _, engine = config:Read("engine", "xelatex")
     _, resolution = config:Read("resolution", 450)
+    _, heightlevel = config:Read("heightlevel", "VM")
 
     config:delete() -- always delete the config
 end
@@ -248,7 +249,7 @@ function ExecCommand(cmd, dir, callback)
     wx.wxSetWorkingDirectory(cwd)
 
     if pid == -1 then
-        print("Unknown ERROR in running program!\n")
+        wx.wxMessageBox("Unknown ERROR in running program!\n" .. cmd, "Error", wx.wxOK + wx.wxCENTRE, frame)
     else
         streamIn = proc and proc:GetInputStream()
         streamErr = proc and proc:GetErrorStream()
@@ -597,23 +598,35 @@ end)
 
 frame:Connect(ID.PPD, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
 	if not wx.wxFileName(predefine_preamble):FileExists() then
-		file:Create(predefine_preamble, true)
-    	file:Write("%\\usepackage{XeCJK}")
-    	file:Close()
+		if not wx.wxFileName(predefine_preamble .. ".disabled"):FileExists() then
+			file:Create(predefine_preamble, true)
+			file:Write("%Contents in this file will be add to the preview fragment\r\n")
+    		file:Write("%\\usepackage{XeCJK}\r\n")
+    		file:Close()
+    	else
+    		if not wx.wxRenameFile(predefine_preamble .. ".disabled",predefine_preamble) then
+    			wx.wxMessageBox("Unable to rename file to enable predefined preamble!", "Error", wx.wxOK + wx.wxCENTRE, frame)
+    		end
+    	end
 	end
     preamble_genstate="PD"
 end)
 
 frame:Connect(ID.PGEN, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    if wx.wxRemoveFile(predefine_preamble) then
+    if wx.wxRenameFile(predefine_preamble,predefine_preamble .. ".disabled") then
         preamble_genstate="GEN"
     else
-    	wx.wxMessageBox("Unable to delete file predefine_preamble.tex!", "Error", wx.wxOK + wx.wxCENTRE, frame)
+    	wx.wxMessageBox("Unable to rename file predefine_preamble.tex to disable predefined preamble!", "Error", wx.wxOK + wx.wxCENTRE, frame)
     end
 end)
 
 frame:Connect(ID.PEDIT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    wx.wxExecute("notepad \""  .. predefine_preamble .. "\"", wx.wxEXEC_ASYNC)
+	if preamble_genstate=="PD" then
+    	wx.wxExecute("notepad \""  .. predefine_preamble .. "\"", wx.wxEXEC_ASYNC)
+    else
+    	wx.wxMessageBox("Predefined preamble is currently off.", "Info", wx.wxOK + wx.wxCENTRE, frame)
+    	wx.wxExecute("notepad \""  .. predefine_preamble .. ".disabled\"", wx.wxEXEC_ASYNC)
+    end
 end)
 
 
