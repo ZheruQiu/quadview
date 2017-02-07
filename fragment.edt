@@ -37,11 +37,11 @@
   Assign('quadview-fragment-old', '%$(|quadview-fragment|)');
   Assign('quadview-fragment', '%!9');
   IfStr('%$(|quadview-fragment|)', '%$(|quadview-fragment-old|)', '=', 'JMP("Exit")', '');
-  IfFileExists("%@('APPDATA');\QuadView\minimal_preview.tex","","JMP('Preamble')");
+  IfFileExists("%@('APPDATA');\QuadView\predefine_preamble.tex","","JMP('Preamble')");
 
-:MinOutput:: ==========================================================
+:PreDefPreambleOutput:: ==========================================================
 //Reusing Register 4
-  ReadFile( "%@('APPDATA');\QuadView\minimal_preview.tex", 4, 0, 0, 0 );
+  ReadFile( "%@('APPDATA');\QuadView\predefine_preamble.tex", 4, 0, 0, 0 );
   OpenOutput("%@('APPDATA');\QuadView\fragment.tex",0,0,0,"%F");
   WrL("%$('quadview-version')");
   WrL("%$('quadview-minpreview')");

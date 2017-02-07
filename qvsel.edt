@@ -31,8 +31,7 @@
     "}%\"+>
     "\makeatother">
   );
-  //Notice minimum preview is not functioning normally with luatex
-  //because of tightpage option of preview package goes wrong
+  //predefined preamble
   Assign("quadview-minpreview", >
   "\documentclass[executivepaper]{article}%\"+>
   "\usepackage{amsmath}%\"+>
@@ -60,11 +59,11 @@
   Assign('quadview-fragment-old', '%$(|quadview-fragment|)');
   Assign('quadview-fragment', '%!9');
   IfStr('%$(|quadview-fragment|)', '%$(|quadview-fragment-old|)', '=', 'JMP("Exit")', '');
-  IfFileExists("%@('APPDATA');\QuadView\minimal_preview.tex","","JMP('Preamble')");
+  IfFileExists("%@('APPDATA');\QuadView\predefine_preamble.tex","","JMP('Preamble')");
 
-:MinOutput:: ==========================================================
+:PreDefPreambleOutput:: ==========================================================
 //Using Register 4
-  ReadFile( "%@('APPDATA');\QuadView\minimal_preview.tex", 4, 0, 0, 0 );
+  ReadFile( "%@('APPDATA');\QuadView\predefine_preamble.tex", 4, 0, 0, 0 );
   OpenOutput("%@('APPDATA');\QuadView\fragment.tex",0,0,0,"%F");
   WrL("%$('quadview-version')");
   WrL("%$('quadview-minpreview')");
@@ -104,6 +103,9 @@
 :StartLua:: =============================================================
   //Avoid multiple instance
   IfFileExists("%@('APPDATA');\QuadView\running","JMP('Exit')","");
-  Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
+  //Use lua.exe to show debug info
+  Run('"%$(|quadview|);\lua.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
+  //Use wlua52.exe to suppress the console window
+  //Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
 :Exit:: =============================================================
   PopTagsandRegisters;

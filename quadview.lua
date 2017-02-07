@@ -1,7 +1,7 @@
 
 require("wx")
 
-VERSION = "0.5"
+VERSION = "0.5m"
 
 -----------------------------------------------------------
 -- Generate a unique new wxWindowID
@@ -26,7 +26,7 @@ mainpath = wx.wxGetCwd()
 datapath = os.getenv("APPDATA") .. sep .. "QuadView"
 cfgname = datapath .. sep .. "quadview.ini"
 runname = datapath .. sep .. "running"
-minimal_preview = datapath .. sep .. "minimal_preview.tex"
+predefine_preamble = datapath .. sep .. "predefine_preamble.tex"
 latexerr=""
 
 if not wx.wxFileName.DirExists(datapath) and not wx.wxFileName.Mkdir(datapath) then
@@ -205,7 +205,7 @@ frame:Connect(ID.TIMER_RESIZE, wx.wxEVT_TIMER, TimerResize)
 -----------------------------------------------------------
 
 local proc, streamIn, streamErr, streamOut
-local inRunning = false
+local isRunning = false
 
 ID.TIMER_EXECUTION = NewID()
 local execTimer = wx.wxTimer(frame, ID.TIMER_EXECUTION)
@@ -236,6 +236,7 @@ function ExecCommand(cmd, dir, callback)
         ReadStream()
         proc = nil
         isRunning = false
+        print("process ended")
         callback()
     end)
 
@@ -276,9 +277,15 @@ cuttedpngname = datapath .. sep .. "fragment-%d.png"
 if not engine then engine = "xelatex" end
 if not resolution then resolution = 450 end
 if not heightlevel then heightlevel = "VM" end
+local preamble_genstate
+if wx.wxFileName(predefine_preamble):FileExists()then
+	preamble_genstate="PD"
+else
+	preamble_genstate="GEN"
+end
+	
 switch = "-interaction=nonstopmode -output-directory=\"" .. datapath .. "\""
 
-local isPending = false
 modtime = wx.wxDateTime()
 
 function CheckFileTime()
@@ -293,13 +300,13 @@ function CheckFileTime()
     end
 end
 
-function CompileDocument()
+function CompileDocument(DoTimeCheck)
     local fn = wx.wxFileName(dirname)
     if not fn:FileExists() then return end
     local file = io.input(dirname)
     local dir = io.read("*line")
     io.close(file)
-    if not CheckFileTime() and not isPending then
+    if (DoTimeCheck==1 and (not CheckFileTime())) or isRunning then
         --print(modtime:GetTicks())
         return
     end
@@ -307,7 +314,7 @@ function CompileDocument()
     wx.wxRemoveFile(pdfname)
     --Replace \ to / to resolve http://tex.stackexchange.com/questions/271617/luatex-issue-with-space-in-path
     isPending = ExecCommand(string.gsub(cmd, "\\", "/"), dir, PreviewDocument)
-    frame:SetStatusText("Running " .. engine)
+    frame:SetStatusText("  Running " .. engine)
 end
 
 function PreviewDocument()
@@ -318,7 +325,7 @@ function PreviewDocument()
         ExecCommand(cmd, mainpath, CropBitmap)
         frame:SetStatusText(latexerr .. "  Running mudraw")
     else
-        frame:SetStatusText(latexerr .. "  PDF NOT FOUND")
+        frame:SetStatusText(latexerr .. "  !PDF NOT FOUND")
     end
 end
 
@@ -342,7 +349,7 @@ function CropBitmap()
         ExecCommand(imcmd, mainpath, UpdateBitmap)
         frame:SetStatusText(latexerr .. "  Running ImageMagick")
     else
-        frame:SetStatusText(latexerr .. "  PNG NOT FOUND")
+        frame:SetStatusText(latexerr .. " !PNG NOT FOUND")
     end
 end
 
@@ -354,7 +361,7 @@ function UpdateBitmap()
             ResizeControl()
         end
     else
-    	frame:SetStatusText(latexerr .. "  CUTTED PNG NOT FOUND")
+    	frame:SetStatusText(latexerr .. " !CUTTED PNG NOT FOUND")
         ClearImage()
         ResizeControl()
     end
@@ -424,7 +431,9 @@ function ClearImage()
     end
 end
 
-frame:Connect(ID.TIMER_PREVIEW, wx.wxEVT_TIMER, CompileDocument)
+frame:Connect(ID.TIMER_PREVIEW, wx.wxEVT_TIMER, function(event)
+	CompileDocument(1)
+end)
 
 previewTimer:Start(1000);
 
@@ -516,26 +525,29 @@ menu:Check(ID[heightlevel], true)
 
 menu:AppendSeparator()
 
-ID.MIN         = NewID()
-ID.MINON       = NewID()
-ID.MINONCJK    = NewID()
-ID.MINOFF      = NewID()
-ID.MINEDIT     = NewID()
+ID.P         = NewID()
+ID.PPD       = NewID()
+ID.PGEN      = NewID()
+ID.PEDIT     = NewID()
 
-menu:Append(ID.MIN, "Minimal Preview", wx.wxMenu{
-    { ID.MINON, "&ON",   "Turn Minimal Preview On",   wx.wxITEM_RADIO },
-    { ID.MINONCJK, "ON &with CJK",   "Turn Minimal Preview On",   wx.wxITEM_RADIO },
-    { ID.MINOFF, "O&FF", "Turn Minimal Preview Off", wx.wxITEM_RADIO },
-    { ID.MINEDIT, "&Edit preamble", "Edit additional preamble of the fragment", wx.wxITEM_RADIO },
+menu:Append(ID.P, "Preamble Generation", wx.wxMenu{
+    { ID.PPD, "&Predefined",   "Predefined simple environment",   wx.wxITEM_RADIO },
+    { ID.PEDIT, "&Edit additional predefined preamble", "Edit additional preamble of the fragment", wx.wxITEM_RADIO },
+    { ID.PGEN, "E&xtract from file", "Slower", wx.wxITEM_RADIO },
 })
-
-menu:Check(ID.MINON, false)
+menu:Check(ID["P" .. preamble_genstate], true)
 
 menu:AppendSeparator()
 
 ID.FRAGMENT = NewID()
 
 menu:Append(ID.FRAGMENT, "&Show Fragment Folder", "Open Fragment Folder")
+
+menu:AppendSeparator()
+
+ID.RECOMPILE =NewID()
+
+menu:Append(ID.RECOMPILE , "&Recompile","Recompile fragment.tex")
 
 menu:AppendSeparator()
 
@@ -583,27 +595,30 @@ frame:Connect(ID.FRAGMENT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
     wx.wxExecute("explorer "  .. datapath, wx.wxEXEC_ASYNC)
 end)
 
-frame:Connect(ID.MINON, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    file:Create(minimal_preview, true)
-    file:Close()
+frame:Connect(ID.PPD, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+	if not wx.wxFileName(predefine_preamble):FileExists() then
+		file:Create(predefine_preamble, true)
+    	file:Write("%\\usepackage{XeCJK}")
+    	file:Close()
+	end
+    preamble_genstate="PD"
 end)
 
-frame:Connect(ID.MINONCJK, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    file:Create(minimal_preview, true)
-    engine = "xelatex"
-    frame:SetStatusText("engine switched to xelatex")
-    file:Write("\\usepackage{XeCJK}")
-    file:Close()
-end)
-
-frame:Connect(ID.MINOFF, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    if not wx.wxRemoveFile(minimal_preview) then
-        wx.wxMessageBox("Unable to delete file minimal_preview.tex!", "Error", wx.wxOK + wx.wxCENTRE, frame)
+frame:Connect(ID.PGEN, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    if wx.wxRemoveFile(predefine_preamble) then
+        preamble_genstate="GEN"
+    else
+    	wx.wxMessageBox("Unable to delete file predefine_preamble.tex!", "Error", wx.wxOK + wx.wxCENTRE, frame)
     end
 end)
 
-frame:Connect(ID.MINEDIT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
-    wx.wxExecute("notepad \""  .. minimal_preview .. "\"", wx.wxEXEC_ASYNC)
+frame:Connect(ID.PEDIT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    wx.wxExecute("notepad \""  .. predefine_preamble .. "\"", wx.wxEXEC_ASYNC)
+end)
+
+
+frame:Connect(ID.RECOMPILE, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
+    CompileDocument(0)
 end)
 
 frame:Connect(ID.ABOUT, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)
