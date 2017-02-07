@@ -73,7 +73,7 @@ function GetConfig()
     if config then
         config:SetRecordDefaults()
     else
-        print("Failed to load config file!")
+        --print("Failed to load config file!")
     end
     return config
 end
@@ -171,35 +171,45 @@ RestoreSettings()
 ID.TIMER_RESIZE = NewID()
 local sizeTimer = wx.wxTimer(frame, ID.TIMER_RESIZE)
 
-function ResizeControl()
-    local size = frame:GetSize()
-    local w, h = size:GetWidth(), size:GetHeight()
-    size = frame:GetClientSize()
-    local cw, ch = size:GetWidth(), size:GetHeight()
-    local iw, ih = image:GetWidth(), image:GetHeight()
-    if iw == 0 then iw = 320 end
-    if ih == 0 then ih = 240 end
-    local nh =  cw * ih / iw
-    bitmap = wx.wxBitmap(image:Scale(cw, nh, wx.wxIMAGE_QUALITY_HIGH))
-    preview:SetBitmap(bitmap)
-    preview:SetSize(0, 0, cw, ch)
-    if nh - ch > 2 or ch - nh > 2 then
-        frame:SetSize(w, h + nh - ch)
-    end
-    frame:Refresh()
-end
 
 frame:Connect(wx.wxEVT_SIZE, function(event)
     sizeTimer:Start(100, true)
+    --print("ts")
     event:Skip()
 end)
 
 function TimerResize()
+	--print("trs")
     ResizeControl()
     sizeTimer:Stop()
 end
 
 frame:Connect(ID.TIMER_RESIZE, wx.wxEVT_TIMER, TimerResize)
+
+
+function ResizeControl()
+	--print("here")
+    local size = frame:GetSize()
+    local w, h = size:GetWidth(), size:GetHeight()
+    --print("w"..tostring(w).."h"..tostring(h))
+    size = frame:GetClientSize()
+    local cw, ch = size:GetWidth(), size:GetHeight()
+    --print("cw"..tostring(cw).."ch"..tostring(ch))
+    local iw, ih = image:GetWidth(), image:GetHeight()
+	--print("iw"..tostring(iw).."ih"..tostring(ih))
+    if iw == 0 then iw = 320 end
+    if ih == 0 then ih = 240 end
+    local nh =  math.floor(cw * ih / iw)
+    --print("w" .. tostring(w) .. "h" .. tostring(h).."cw"..tostring(cw).."ch"..tostring(ch).."iw"..tostring(iw).."ih"..tostring(ih).."nh"..tostring(nh))
+    bitmap = wx.wxBitmap(image:Scale(cw, nh, wx.wxIMAGE_QUALITY_HIGH))
+    preview:SetBitmap(bitmap)
+    preview:SetSize(0, 0, cw, ch)
+    if nh - ch > 2 or ch - nh > 2 then
+    	--print("Size set to " .. tostring(w) .. " " .. tostring(h + nh - ch))
+        frame:SetSize(w, h + nh - ch)
+    end
+    frame:Refresh()
+end
 
 -----------------------------------------------------------
 -- Execute commands asynchronously
@@ -224,10 +234,10 @@ end
 
 function ExecCommand(cmd, dir, callback)
     if isRunning then
-        print("isRunning")
+        --print("isRunning")
         return true
     else
-        print("notRunning")
+        --print("notRunning")
     end
 
     proc = wx.wxProcess()
@@ -237,15 +247,16 @@ function ExecCommand(cmd, dir, callback)
         ReadStream()
         proc = nil
         isRunning = false
-        print("process ended")
+        --print("process ended")
         callback()
     end)
 
     local cwd = wx.wxGetCwd()
     wx.wxSetWorkingDirectory(dir)
-    print(cmd)
+    --print(cmd)
     isRunning = true
-    local pid = wx.wxExecute(cmd, wx.wxEXEC_ASYNC, proc)
+    local pid = wx.wxExecute(cmd, wx.wxEXEC_ASYNC, proc)     
+    --print("PID:" .. tostring(pid))
     wx.wxSetWorkingDirectory(cwd)
 
     if pid == -1 then
@@ -354,13 +365,25 @@ function CropBitmap()
     end
 end
 
+--function IsEmptyImage()
+--    local s = image:GetData()
+--    if string.match(s, "^\255+$") then
+--    	--print("empty image")
+--        return true
+--    else
+--        return false
+--    end
+--end
+
 function UpdateBitmap()
     local png = FindImage()
     if png then
+    	--print("loading " .. png)
         image:LoadFile(png, wx.wxBITMAP_TYPE_PNG)
-        if not IsEmptyImage() then
-            ResizeControl()
-        end
+        --print("loaded")
+        --image:GetData() strangly crashs lua
+        --IsEmptyImage removed
+        ResizeControl()
     else
     	frame:SetStatusText(latexerr .. " !CUTTED PNG NOT FOUND")
         ClearImage()
@@ -370,26 +393,27 @@ end
 
 function NextBitmap()
     local png = NextImage()
-    if png and image:LoadFile(png, wx.wxBITMAP_TYPE_PNG) then
-        ResizeControl()
+    --print("loading next png:" .. png)
+    if png and image:LoadFile(png, wx.wxBITMAP_TYPE_PNG) then  
+    	--print("loaded")
+    	ResizeControl()
     end
 end
 
 page = 1
-total = 0
+total = 1
 
 function FindImage()
-    local png = ""
+    local png = ""  
+    page=1
     while true do
-        png = string.format(cuttedpngname, page)
+        png = string.format(cuttedpngname, total)
         if wx.wxFileName.FileExists(png) then
-            page = page + 1
+            total = total + 1
         else break end
     end
-    page = page-1
-    total = page
-    if page > 0 then
-    	page = 1
+    total = total - 1
+    if total > 0 then
     	frame:SetStatusText(latexerr .. "  Page:1 of " .. tostring(total))
         return string.format(cuttedpngname, 1)
     else return nil end
@@ -407,21 +431,13 @@ end
 
 function RemoveImage()
     local i = 1
+    --print("deleting pngs")
     while true do
         if wx.wxRemoveFile(string.format(cuttedpngname, i)) then
             i = i + 1
         else break end
     end
     wx.wxRemoveFile(pngname)
-end
-
-function IsEmptyImage()
-    local s = image:GetData()
-    if string.match(s, "^\255+$") then
-        return true
-    else
-        return false
-    end
 end
 
 function ClearImage()
