@@ -104,8 +104,8 @@
   //Avoid multiple instance
   IfFileExists("%@('APPDATA');\QuadView\running","JMP('Exit')","");
   //Use lua.exe to show debug info
-  Run('"%$(|quadview|);\lua.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
+  //Run('"%$(|quadview|);\lua.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
   //Use wlua52.exe to suppress the console window
-  //Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
+  Run('"%$(|quadview|);\wlua52.exe" "%$(|quadview|);\quadview.lua"', '%$(|quadview|)');
 :Exit:: =============================================================
   PopTagsandRegisters;
